@@ -1,15 +1,16 @@
 import math
 from collections import deque
 
-addresses = [4, 8, 20, 24, 28, 36, 44, 20, 24, 28, 36, 40, 44, 68, 72, 92, 96, 100, 104, 108, 112, 100, 112, 116, 120, 128, 140]
+addresses = [4, 8, 20, 24, 28, 36, 44, 20, 24, 28, 36, 40, 44, 68, 72, 92, 96, 100]
 address_size = 16
 instruction_size = 32
-
 block_size = 4  # in bytes
 number_of_rows = 8  # must be multiple of 2
+ways = 2  # can be any number (n)
+max_storage_bits = 800 
+# max number of bits all fields can take, tag, valid, LRU, data, etc.
+# <cache's byte size> <cache block's byte size> <number of associativity>
 # number_of_sets = 4  # must be multiple of 2 (r)
-ways = 1  # can be any number (n)
-max_storage_bits = 800  # max number of bits all fields can take, tag, valid, LRU, data, etc.
 # Set Associative requires LRU for each way ceil(lg n)
 # Fully Associative requires LRU for each row ceil(lg r)
 
@@ -86,16 +87,21 @@ def simulateDirectMap():
                 print("Cache Hit on row " + str(row))
             if i > 0:
                 total_instructions += 1
+            
+            # print("row\tvalid\ttag")
+            # for j in range(0, number_of_rows):
+            #     print(str(j) + "\t" + str(valid[j]) + "\t" + str(tags[j]))
 
         print("END OF CYCLE " + str(i))
         print("")
+        
 
     print("row\tvalid\ttag")
     for j in range(0, number_of_rows):
         print(str(j) + "\t" + str(valid[j]) + "\t" + str(tags[j]))
     cpi = ((miss_cost * miss_count) + (total_instructions - miss_count)) / total_instructions
     print("CPI: " + str(cpi))
-    print("Simulation complete")
+    print("SIMULATION COMPLETE")
 
 
 def simulateSetAssociative():
@@ -144,7 +150,7 @@ def simulateSetAssociative():
 
     print("row\tvalid\ttag\t|\tvalid\ttag")
     for j in range(0, number_of_rows):
-        print(str(j) + "\t\t", end="")
+        print(str(j) + "\t", end="")
         for k in range(0, ways):
             print(str(valid[j][k]) + "\t" + str(tags[j][k]) + "\t|\t",end="")
         print("")
@@ -152,13 +158,16 @@ def simulateSetAssociative():
 
     cpi = ((miss_cost * miss_count) + (total_instructions - miss_count)) / total_instructions
     print("CPI: " + str(cpi))
-    print("Simulation Complete")
+    print("SIMULATION COMPLETE")
 
 
 def simulateFullyAssociative():
-    tags = [-1] * number_of_rows
-    valid = [0] * number_of_rows
-    LRU = deque()
+    tags1 = [-1] * number_of_rows
+    valid1 = [0] * number_of_rows
+    tags2 = [-1] * number_of_rows * 2
+    valid2 = [0] * number_of_rows * 2
+    LRU1 = deque()
+    LRU2 = deque()
 
     miss_count = 0
     total_instructions = 0
@@ -170,44 +179,91 @@ def simulateFullyAssociative():
             print("Address: " + str(addr) + ", tag: " + str(tag) + ", offset: " + str(offset), end="\t")
 
             # see if tag is in table - hit
-            if tag in tags:
-                location = tags.index(tag)
-                if location in LRU:
-                    LRU.remove(location)
-                LRU.append(location)
-                print("Cache Hit")
+            if tag in tags1:
+                location = tags1.index(tag)
+                if location in LRU1:
+                    LRU1.remove(location)
+                LRU1.append(location)
+                print("Cache1 Hit")
 
             # see if there is an invalid row, - miss, add it
-            elif 0 in valid:
-                location = valid.index(0)
-                tags[location] = tag
-                valid[location] = 1
+            elif 0 in valid1:
+                location = valid1.index(0)
+                tags1[location] = tag
+                valid1[location] = 1
                 if i > 0:
                     miss_count += 1
-                if location in LRU:
-                    LRU.remove(location)
+                if location in LRU1:
+                    LRU1.remove(location)
                     print("THIS SHOULDNT HAPPEN!!!!!!!!!!!!")
-                LRU.append(location)
-                print("Cache Miss - adding to empty row")
+                LRU1.append(location)
+                print("Cache1 Miss - adding to empty row")
 
             # else, find least recently used and update - miss
             else:
-                leastUsedLoc = LRU.popleft()
-                tags[leastUsedLoc] = tag
-                if i > 0:
-                    miss_count += 1
-                if leastUsedLoc in LRU:
-                    LRU.remove(leastUsedLoc)
-                    print("THIS SHOULDNT HAPPEN!!!!!!!!!!!!")
-                LRU.append(leastUsedLoc)
-                print("Cache Miss - replacing row")
+                # see if tag is in table - hit
+                if tag in tags2:
+                    location = tags2.index(tag)
+                    if location in LRU2:
+                        LRU2.remove(location)
+                    leastUsedLoc = LRU1.popleft()
+                    oldtag = tags1[leastUsedLoc]
+                    tags1[leastUsedLoc] = tag
+                    tags2[location] = oldtag
+                    LRU1.append(leastUsedLoc)
+                    LRU2.append(location)
+                    print("Cache2 Hit")
+
+                # see if there is an invalid row, - miss, add it
+                elif 0 in valid2:
+                    location = valid2.index(0)
+                    valid2[location] = 1
+                    if i > 0:
+                        miss_count += 1
+                    if location in LRU2:
+                        LRU2.remove(location)
+                        print("THIS SHOULDNT HAPPEN!!!!!!!!!!!!")
+                    leastUsedLoc = LRU1.popleft()
+                    oldtag = tags1[leastUsedLoc]
+                    tags1[leastUsedLoc] = tag
+                    tags2[location] = oldtag
+                    LRU1.append(leastUsedLoc)
+                    LRU2.append(location)
+                    print("Cache2 Miss - adding to empty row")
+
+                # else, find least recently used and update - miss
+                else:
+                    location = LRU2.popleft()
+                    leastUsedLoc = LRU1.popleft()
+                    if i > 0:
+                        miss_count += 1
+                    if leastUsedLoc in LRU1:
+                        LRU1.remove(leastUsedLoc)
+                        print("THIS SHOULDNT HAPPEN!!!!!!!!!!!!")                  
+                    oldtag = tags1[leastUsedLoc]
+                    tags1[leastUsedLoc] = tag
+                    tags2[location] = oldtag
+                    LRU1.append(leastUsedLoc)
+                    LRU2.append(location)
+                    print("Cache2 Miss - replacing row")
 
             if i > 0:
                 total_instructions += 1
-
-    print("row\tvalid\ttag")
-    for j in range(0, number_of_rows):
-        print(str(j) + "\t" + str(valid[j]) + "\t" + str(tags[j]))
+                     
+            print("Cache1 -------------------------------- ")
+            print("LRU1 locations deque: " + str(LRU1))
+            print("row\tvalid\ttag")
+            for j in range(0, number_of_rows):
+                print(str(j) + "\t" + str(valid1[j]) + "\t" + str(tags1[j]))
+            print("Cache2 -------------------------------- ")
+            print("LRU2 locations deque: " + str(LRU2))
+            print("row\tvalid\ttag")
+            for j in range(0, number_of_rows * 2):
+                print(str(j) + "\t" + str(valid2[j]) + "\t" + str(tags2[j]))
+        
+        print("END OF CYCLE: " + str(i))
+        print("")
+        
     cpi = ((miss_cost * miss_count) + (total_instructions - miss_count)) / total_instructions
     print("CPI: " + str(cpi))
     print("SIMULATION COMPLETE")
